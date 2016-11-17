@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#3F51B5</color>
+    <color name="colorPrimaryDark">#303F9F</color>
+    <color name="colorAccent">#FF4081</color>
+
+    <color name="drawer_backround_color">#cfd8dc</color>
+
+    <color name="my_message_color_shape">#d3dcf9</color>
+    <color name="foreign_message">#ffcdd2</color>
+
+</resources>

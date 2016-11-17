@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">ChatApp</string>
+    <string name="login_text_hint">Какой у вас ник?</string>
+    <string name="signin_chat">В чат!!!</string>
+    <string name="not_empty">Обязательно выберите себе ник</string>
+    
+    <string name="enter_to_chat">вошел в чат</string>
+    <string name="exit_fram_chat">покинул чат</string>
+    <string name="you_enter_to_chat">вошли в чат</string>
+    
+    <string name="who_in_chat">Кто в чате?</string>
+
+
+
+</resources>
