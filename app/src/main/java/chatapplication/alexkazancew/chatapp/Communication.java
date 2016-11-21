@@ -28,6 +28,8 @@ import io.socket.client.IO;
 import io.socket.client.Socket;
 import io.socket.emitter.Emitter;
 
+import static android.R.attr.data;
+import static android.R.attr.description;
 import static android.R.attr.id;
 import static android.R.attr.track;
 
@@ -66,7 +68,6 @@ public class Communication {
         mPeerClients = new ArrayList<>();
 
 
-
         try {
             IO.Options options1 = new IO.Options();
             options1.hostname = "tz.teleport.media";
@@ -94,16 +95,16 @@ public class Communication {
 
 
     public void sendMessage(String message) {
+
         for (PeerClient peer : mPeerClients) {
-            if(peer.dataChannel !=null)
-            peer.dataChannel.send(new DataChannel.Buffer(ByteBuffer.wrap(message.getBytes()), false));
+
+            if (peer.dataChannel != null)
+                peer.dataChannel.send(new DataChannel.Buffer(ByteBuffer.wrap(message.getBytes()), false));
         }
     }
 
 
-
-    public void onStop()
-    {
+    public void onStop() {
         mSocket.emit("disconnect");
         mSocket.disconnect();
         mSocket.close();
@@ -126,9 +127,8 @@ public class Communication {
                 int sdpMLineIndex = candidate.getInt("sdpMLineIndex");
 
                 PeerClient peer = getPeerClientBySocketId(id);
-                peer.peerConnection.addIceCandidate(
-                        new IceCandidate(sdpMid, sdpMLineIndex, sdp));
-                peer.createDataChanel();
+                IceCandidate iceCandidate = new IceCandidate(sdpMid, sdpMLineIndex,sdp);
+                peer.peerConnection.addIceCandidate(iceCandidate);
 
 
             } catch (Exception ex) {
@@ -140,24 +140,26 @@ public class Communication {
     private Emitter.Listener onAnswerRecive = new Emitter.Listener() {
         @Override
         public void call(Object... args) {
-            Log.d(SOCKET_IO_TAG, args[0].toString());
-
 
             try {
 
 
                 JSONObject data = (JSONObject) args[0];
-                Log.d(SOCKET_IO_TAG, "ANSWER:\n " + data.toString() );
+                Log.d(SOCKET_IO_TAG, "ANSWER RECIVE:\n " + data.toString());
 
                 final String id = data.getString("id");
-                JSONObject discription = data.getJSONObject("offer");
-                SessionDescription.Type type = (SessionDescription.Type) discription.get("type");
-                String description = data.getString("description");
-                getPeerClientBySocketId(id).setRemoteDescr(new SessionDescription(type, description));
+                JSONObject answer = data.getJSONObject("answer");
+                SessionDescription.Type type = SessionDescription.Type.valueOf(answer.get("type").toString());
+                String description = answer.getString("description");
+                SessionDescription sessionDescription = new SessionDescription(type, description);
+                PeerClient client = getPeerClientBySocketId(id);
+                if (client != null) {
+                    client.setRemoteDescription(sessionDescription);
+                }
 
 
             } catch (Exception ex) {
-                Log.e(SOCKET_IO_TAG, "Error onAnswerRecive"+ ex.getMessage());
+                Log.e(SOCKET_IO_TAG, "Error onAnswerRecive" + ex.getMessage());
             }
 
 
@@ -166,31 +168,39 @@ public class Communication {
 
     private Emitter.Listener onOfferRecive = new Emitter.Listener() {
         @Override
-        public void call(Object... args) {
-
-            try {
+        public void call(final Object... args) {
 
 
-                final JSONObject data = (JSONObject) args[0];
-                Log.d(SOCKET_IO_TAG, "offer recive:   " + data.toString() );
-                final String id = data.getString("id");
-                JSONObject discription = data.getJSONObject("offer");
-                SessionDescription.Type type = (SessionDescription.Type) discription.get("type");
-                String description = data.getString("description");
+            mChatActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
 
 
-                User user = new User(id, null);
-                PeerClient peerClient = new PeerClient(user);
-                mPeerClients.add(peerClient);
-                mCallback.newUserConnect(user);
+                        final JSONObject data = (JSONObject) args[0];
+                        Log.d(SOCKET_IO_TAG, "offer recive:   " + data.toString());
+                        final String socketId = data.getString("id");
+                        JSONObject description = data.getJSONObject("offer");
+                        SessionDescription.Type type = SessionDescription.Type.valueOf(description.get("type").toString());
+
+                        Log.d(SOCKET_IO_TAG, "TYPE OF SESSION DESCRIPTION: " + type.toString());
+
+                        String descriptionString = description.getString("description");
 
 
-                peerClient.sendAnswer(new SessionDescription(type, description));
+                        PeerClient peerClient = new PeerClient(new User(socketId, null));
+                        mPeerClients.add(peerClient);
+                        peerClient.sendAnswer(new SessionDescription(type, descriptionString));
 
 
-            } catch (Exception ex) {
-                Log.e(SOCKET_IO_TAG, "Error onOfferRecive "+ ex.getMessage());
-            }
+                    } catch (Exception ex) {
+                        Log.e(SOCKET_IO_TAG, "Error onOfferRecive " + ex.getMessage());
+                    }
+
+
+                }
+            });
+
 
         }
     };
@@ -208,7 +218,7 @@ public class Communication {
                     JSONObject jsonObject = (JSONObject) args[0];
 
                     try {
-                        Log.d(SOCKET_IO_TAG, "OnDisconnect:  "  + jsonObject.toString());
+                        Log.d(SOCKET_IO_TAG, "OnDisconnect:  " + jsonObject.toString());
                         String id = jsonObject.getString("id");
                         mCallback.onUserDisconnect(id);
                         mPeerClients.remove(getPeerClientBySocketId(id));
@@ -216,7 +226,7 @@ public class Communication {
 
                     } catch (Exception ex) {
                         ex.printStackTrace();
-                        Log.e(SOCKET_IO_TAG, "Error onUserDisconnect parsing"+ ex.getMessage());
+                        Log.e(SOCKET_IO_TAG, "Error onUserDisconnect parsing" + ex.getMessage());
                     }
 
                 }
@@ -242,8 +252,7 @@ public class Communication {
                     public void run() {
 
 
-                        if( getPeerClientBySocketId(id) == null)
-                        {
+                        if (getPeerClientBySocketId(id) == null) {
 
                             mCallback.newUserConnect(new User(id, name));
 
@@ -258,19 +267,19 @@ public class Communication {
 
             } catch (Exception ex) {
                 ex.printStackTrace();
-                Log.e(SOCKET_IO_TAG, "Erorr parsing on new User"+ ex.getMessage());
+                Log.e(SOCKET_IO_TAG, "Erorr parsing on new User" + ex.getMessage());
             }
         }
     };
 
     private Emitter.Listener onConnect = new Emitter.Listener() {
-//        @Override
+        //        @Override
         public void call(Object... args) {
             Log.d(SOCKET_IO_TAG, "OPEN!!!!");
 //                    socket.send("login", object.toString());
             try {
 
-                if(isFirstConnection) {
+                if (isFirstConnection) {
                     JSONObject dataClient = new JSONObject();
                     dataClient.put("name", ChatActivity.mMyNickname);
                     mSocket.emit("login", dataClient.toString());
@@ -278,7 +287,7 @@ public class Communication {
                 }
 
             } catch (Exception ex) {
-                Log.e(SOCKET_IO_TAG, "error parsing on Connect"+ ex.getMessage());
+                Log.e(SOCKET_IO_TAG, "error parsing on Connect" + ex.getMessage());
             }
 
         }
@@ -305,7 +314,7 @@ public class Communication {
 
                     } catch (Exception ex) {
                         ex.printStackTrace();
-                        Log.e(SOCKET_IO_TAG, "Error onLoginSucces parsing"+ ex.getMessage());
+                        Log.e(SOCKET_IO_TAG, "Error onLoginSucces parsing" + ex.getMessage());
                     }
 
                 }
@@ -329,11 +338,14 @@ public class Communication {
         PeerConnection peerConnection;
         DataChannel dataChannel;
 
+
+
         public PeerClient(final User user) {
             this.user = user;
 
 
             List<PeerConnection.IceServer> list = new ArrayList<>();
+            list.add(new PeerConnection.IceServer("stun:stun1.l.google.com:19302"));
 
 
             PeerConnectionFactory.initializeAndroidGlobals(mChatActivity, true, true, true, null);
@@ -361,10 +373,12 @@ public class Communication {
 
                         @Override
                         public void onIceCandidate(IceCandidate iceCandidate) {
-                            Log.d(SOCKET_IO_TAG, iceCandidate.toString());
+                            Log.d(SOCKET_IO_TAG, "onIceCandidate: " + iceCandidate.toString());
 
 
                             try {
+
+                                peerConnection.addIceCandidate(iceCandidate);
 
                                 JSONObject candidate = new JSONObject();
                                 candidate.put("sdp", iceCandidate.sdp);
@@ -376,11 +390,9 @@ public class Communication {
 
                                 mSocket.emit("candidate", data);
 
-                                createDataChanel();
-
 
                             } catch (JSONException ex) {
-                                Log.d(SOCKET_IO_TAG, "onIceCandidate");
+                                Log.d(SOCKET_IO_TAG, "onIceCandidate error" + ex.getMessage());
                             }
                         }
 
@@ -396,7 +408,33 @@ public class Communication {
 
                         @Override
                         public void onDataChannel(DataChannel dataChannel) {
+                                Log.d(SOCKET_IO_TAG, "onDataChanel");
+                            dataChannel.registerObserver(new DataChannel.Observer() {
+                                @Override
+                                public void onStateChange() {
 
+                                }
+
+                                @Override
+                                public void onMessage(final DataChannel.Buffer buffer) {
+                                    Log.d(SOCKET_IO_TAG, "omMessage()");
+
+                                    mChatActivity.runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+
+                                            ByteBuffer byteBuffer = buffer.data;
+                                            Log.d(SOCKET_IO_TAG, "MESSAGE: " + buffer.data);
+                                            byte[] b = new byte[byteBuffer.capacity()];
+                                            byteBuffer.get(b);
+                                            mCallback.newMessage(new Message("",
+                                                    new String(b), MessageType.MESSAGE));
+
+                                        }
+                                    });
+
+                                }
+                            });
                         }
 
                         @Override
@@ -405,41 +443,38 @@ public class Communication {
                         }
                     });
 
+            createDataChanel();
+            Log.d(SOCKET_IO_TAG,peerConnection.signalingState().toString());
 
         }
 
 
-        public void createDataChanel()
-        {
-            dataChannel = peerConnection.createDataChannel(user.getName(), new DataChannel.Init());
+        public void createDataChanel() {
+            dataChannel = peerConnection.createDataChannel(user.getSocketId(), new DataChannel.Init());
             dataChannel.registerObserver(new DataChannel.Observer() {
                 @Override
                 public void onStateChange() {
+                    Log.d(SOCKET_IO_TAG, "DataChanel STATECHANGE: " + dataChannel.state());
 
                 }
 
                 @Override
                 public void onMessage(DataChannel.Buffer buffer) {
-                    mCallback.newMessage(new Message("",
-                            new String(buffer.data.asReadOnlyBuffer().array()), MessageType.MESSAGE));
-                }
+            }
             });
 
         }
 
-        public void setRemoteDescr(SessionDescription sessionDescription) {
+        public void setRemoteDescription(SessionDescription sessionDescription) {
             peerConnection.setRemoteDescription(new SdpObserver() {
                 @Override
                 public void onCreateSuccess(SessionDescription sessionDescription) {
-
-
-
-
+                    Log.d(SOCKET_IO_TAG, "setRemoteDescriptioin()");
                 }
 
                 @Override
                 public void onSetSuccess() {
-
+                    Log.d(SOCKET_IO_TAG, "setRemoteDescription()");
                 }
 
                 @Override
@@ -450,6 +485,7 @@ public class Communication {
                 @Override
                 public void onSetFailure(String s) {
 
+                    Log.e(SOCKET_IO_TAG, "setRemoteDescription() failure: " + s);
                 }
             }, sessionDescription);
         }
@@ -459,12 +495,36 @@ public class Communication {
                 @Override
                 public void onCreateSuccess(SessionDescription sessionDescription) {
                     try {
-                        JSONObject discription = new JSONObject();
-                        discription.put("type", sessionDescription.type);
-                        discription.put("description", sessionDescription.description);
+
+                        Log.d(SOCKET_IO_TAG, "setLocalDescription");
+                        peerConnection.setLocalDescription(new SdpObserver() {
+                            @Override
+                            public void onCreateSuccess(SessionDescription sessionDescription) {
+
+                            }
+
+                            @Override
+                            public void onSetSuccess() {
+                                Log.d(SOCKET_IO_TAG, "setLocalDescription() success");
+                            }
+
+                            @Override
+                            public void onCreateFailure(String s) {
+
+                            }
+
+                            @Override
+                            public void onSetFailure(String s) {
+
+                            }
+                        }, sessionDescription);
+
+                        JSONObject description = new JSONObject();
+                        description.put("type", sessionDescription.type);
+                        description.put("description", sessionDescription.description);
 
                         JSONObject data = new JSONObject();
-                        data.put("offer", discription);
+                        data.put("offer", description);
                         data.put("id", user.getSocketId());
 
                         Log.d(SOCKET_IO_TAG, "JSON OFFER :   " + data.toString());
@@ -497,13 +557,22 @@ public class Communication {
         }
 
 
-        public void sendAnswer(SessionDescription sessionDescription) {
+        public void sendAnswer(SessionDescription sessionRemoteDescription) {
+            Log.d(SOCKET_IO_TAG, "sendAnswer()");
+
+
             peerConnection.setRemoteDescription(new SdpObserver() {
                 @Override
-                public void onCreateSuccess(SessionDescription sessionDescription) {
+                public void onCreateSuccess(SessionDescription sessionRemoteDescriptionToAnswer) {
+                }
+
+                @Override
+                public void onSetSuccess() {
+                    Log.d(SOCKET_IO_TAG, "setRemoteDescription() onSetSuccess");
+                    Log.d(SOCKET_IO_TAG, "onCreateSuccess() setRemoteDiscription()");
                     peerConnection.createAnswer(new SdpObserver() {
                         @Override
-                        public void onCreateSuccess(SessionDescription sessionDescription) {
+                        public void onCreateSuccess(final SessionDescription sessionDescription) {
 
                             peerConnection.setLocalDescription(new SdpObserver() {
                                 @Override
@@ -513,11 +582,28 @@ public class Communication {
 
                                 @Override
                                 public void onSetSuccess() {
+                                    try {
+
+                                        JSONObject description = new JSONObject();
+                                        description.put("type", sessionDescription.type);
+                                        description.put("description", sessionDescription.description);
+                                        JSONObject data = new JSONObject();
+                                        data.put("answer", description);
+                                        data.put("id", user.getSocketId());
+                                        Log.d(SOCKET_IO_TAG, "ANSWER CREATE: " + description.toString());
+
+                                        mSocket.emit("answer", data);
+
+
+                                    } catch (JSONException ex) {
+                                        Log.e(SOCKET_IO_TAG, "ANSWER CREATE ERROR: " + ex.getMessage());
+                                    }
 
                                 }
 
                                 @Override
                                 public void onCreateFailure(String s) {
+                                    Log.e(SOCKET_IO_TAG, "createAnswer() error: " + s);
 
                                 }
 
@@ -528,22 +614,7 @@ public class Communication {
                             }, sessionDescription);
 
 
-                            try {
-                                JSONObject discription = new JSONObject();
-                                discription.put("type", sessionDescription.type);
-                                discription.put("description", sessionDescription.description);
-
-                                JSONObject data = new JSONObject();
-                                data.put("data", discription);
-                                data.put("id", user.getSocketId());
-
-                                mSocket.emit("answer", data);
-
-
-                            } catch (JSONException ex) {
-
-                            }
-
+                            Log.d(SOCKET_IO_TAG, "createAnswer() onCreateSuccess()");
 
                         }
 
@@ -554,7 +625,7 @@ public class Communication {
 
                         @Override
                         public void onCreateFailure(String s) {
-
+                            Log.e(SOCKET_IO_TAG, "createAnswer() error: " + s);
                         }
 
                         @Override
@@ -562,23 +633,22 @@ public class Communication {
 
                         }
                     }, new MediaConstraints());
-                }
 
-                @Override
-                public void onSetSuccess() {
 
                 }
 
                 @Override
                 public void onCreateFailure(String s) {
-
+                    Log.e(SOCKET_IO_TAG, "setRemoteDescription() error: " + s);
                 }
 
                 @Override
                 public void onSetFailure(String s) {
+                    Log.d(SOCKET_IO_TAG, "setRemoteDescription() onSetFailure()");
 
                 }
-            }, sessionDescription);
+            }, sessionRemoteDescription);
+            Log.d(SOCKET_IO_TAG, "setRemoteDescription()");
         }
 
 

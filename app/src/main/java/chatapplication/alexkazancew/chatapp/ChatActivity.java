@@ -197,7 +197,7 @@ public class ChatActivity extends AppCompatActivity implements ChatViewCallback 
         mDrawerListAdapter.deleteUser(id);
         User user = mDrawerListAdapter.getUserById(id);
 
-        mAdapter.addMessage(new Message(user.getName(), getString(R.string.exit_fram_chat), MessageType.ACTION));
+//        mAdapter.addMessage(new Message(user.getName(), getString(R.string.exit_fram_chat), MessageType.ACTION));
 
     }
 
