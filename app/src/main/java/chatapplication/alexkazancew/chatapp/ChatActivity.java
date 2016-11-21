@@ -85,9 +85,8 @@ public class ChatActivity extends AppCompatActivity implements ChatViewCallback 
             }
         });
 
-
-        mAdapter = new ChatAdapter(new ArrayList<Message>(0), mMyNickname);
         mLinearLayoutManager = new LinearLayoutManager(this);
+        mAdapter = new ChatAdapter(new ArrayList<Message>(0), mMyNickname, mRecycler);
         mRecycler.setAdapter(mAdapter);
         mRecycler.setLayoutManager(mLinearLayoutManager);
 
@@ -96,9 +95,10 @@ public class ChatActivity extends AppCompatActivity implements ChatViewCallback 
 
 
     private void sendMessage() {
-        String message = mEditMessage.getText().toString();
-        if (!message.isEmpty()) {
-            mAdapter.addMessage(new Message(mMyNickname, message, MessageType.MESSAGE));
+        String messageString = mEditMessage.getText().toString();
+        if (!messageString.isEmpty()) {
+            Message message = new Message(mMyNickname, messageString, MessageType.MESSAGE);
+            mAdapter.addMessage(message);
             mComunication.sendMessage(message);
             mEditMessage.setText("");
         }
@@ -188,8 +188,8 @@ public class ChatActivity extends AppCompatActivity implements ChatViewCallback 
 
         if (!mDrawerListAdapter.mUsers.contains(user)) {
             mAdapter.addMessage(new Message(user.getName(), getString(R.string.enter_to_chat), MessageType.ACTION));
-            mDrawerListAdapter.addUser(user);
-        }
+            userInChat(user);
+            }
     }
 
     @Override
@@ -197,7 +197,6 @@ public class ChatActivity extends AppCompatActivity implements ChatViewCallback 
         mDrawerListAdapter.deleteUser(id);
         User user = mDrawerListAdapter.getUserById(id);
 
-//        mAdapter.addMessage(new Message(user.getName(), getString(R.string.exit_fram_chat), MessageType.ACTION));
 
     }
 
@@ -205,5 +204,11 @@ public class ChatActivity extends AppCompatActivity implements ChatViewCallback 
     @Override
     public void newMessage(Message msg) {
         mAdapter.addMessage(msg);
+        mRecycler.smoothScrollToPosition(mAdapter.getItemCount());
+    }
+
+    @Override
+    public void userInChat(User user) {
+        mDrawerListAdapter.addUser(user);
     }
 }

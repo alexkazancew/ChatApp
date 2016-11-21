@@ -1,6 +1,7 @@
 package chatapplication.alexkazancew.chatapp;
 
 import android.support.v7.widget.AppCompatTextView;
+import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -24,11 +25,12 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     List<Message> messageList;
    String mMyUserName;
+    RecyclerView mRecyclerView;
 
-
-    public ChatAdapter(List<Message> messageList, String myUserName) {
+    public ChatAdapter(List<Message> messageList, String myUserName, RecyclerView recyclerView) {
         this.messageList = new ArrayList<>(messageList);
         this.mMyUserName = myUserName;
+        this.mRecyclerView = recyclerView;
     }
 
     @Override
@@ -86,8 +88,13 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     public void addMessage(Message message)
     {
+
         messageList.add(message);
+
         notifyDataSetChanged();
+        mRecyclerView.smoothScrollToPosition(getItemCount());
+
+
     }
 
     @Override

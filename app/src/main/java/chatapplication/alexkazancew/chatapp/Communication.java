@@ -16,7 +16,9 @@ import org.webrtc.SessionDescription;
 
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.charset.MalformedInputException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Exchanger;
@@ -94,12 +96,22 @@ public class Communication {
     }
 
 
-    public void sendMessage(String message) {
+    public void sendMessage(Message message) {
+
+        JSONObject messageObject = new JSONObject();
+        try {
+
+            messageObject.put("message", message.getMessage());
+            messageObject.put("name", message.getUsername());
+        } catch (JSONException ex) {
+            ex.printStackTrace();
+        }
 
         for (PeerClient peer : mPeerClients) {
 
             if (peer.dataChannel != null)
-                peer.dataChannel.send(new DataChannel.Buffer(ByteBuffer.wrap(message.getBytes()), false));
+                peer.dataChannel.send(new DataChannel.Buffer(ByteBuffer.
+                        wrap(messageObject.toString().getBytes(Charset.forName("UTF-8"))), false));
         }
     }
 
@@ -127,7 +139,7 @@ public class Communication {
                 int sdpMLineIndex = candidate.getInt("sdpMLineIndex");
 
                 PeerClient peer = getPeerClientBySocketId(id);
-                IceCandidate iceCandidate = new IceCandidate(sdpMid, sdpMLineIndex,sdp);
+                IceCandidate iceCandidate = new IceCandidate(sdpMid, sdpMLineIndex, sdp);
                 peer.peerConnection.addIceCandidate(iceCandidate);
 
 
@@ -181,6 +193,10 @@ public class Communication {
                         Log.d(SOCKET_IO_TAG, "offer recive:   " + data.toString());
                         final String socketId = data.getString("id");
                         JSONObject description = data.getJSONObject("offer");
+
+                        String name = description.getString("name");
+                        mCallback.userInChat(new User(socketId, name));
+
                         SessionDescription.Type type = SessionDescription.Type.valueOf(description.get("type").toString());
 
                         Log.d(SOCKET_IO_TAG, "TYPE OF SESSION DESCRIPTION: " + type.toString());
@@ -253,8 +269,6 @@ public class Communication {
 
 
                         if (getPeerClientBySocketId(id) == null) {
-
-                            mCallback.newUserConnect(new User(id, name));
 
                             PeerClient peer = new PeerClient(new User(id, name));
                             peer.sendOffer();
@@ -339,7 +353,6 @@ public class Communication {
         DataChannel dataChannel;
 
 
-
         public PeerClient(final User user) {
             this.user = user;
 
@@ -408,7 +421,18 @@ public class Communication {
 
                         @Override
                         public void onDataChannel(DataChannel dataChannel) {
-                                Log.d(SOCKET_IO_TAG, "onDataChanel");
+                            Log.d(SOCKET_IO_TAG, "onDataChanel");
+
+                            mChatActivity.runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+
+                                    if(user.getName()!= null)
+                                    mCallback.newUserConnect(user);
+
+                                }
+                            });
+
                             dataChannel.registerObserver(new DataChannel.Observer() {
                                 @Override
                                 public void onStateChange() {
@@ -427,8 +451,16 @@ public class Communication {
                                             Log.d(SOCKET_IO_TAG, "MESSAGE: " + buffer.data);
                                             byte[] b = new byte[byteBuffer.capacity()];
                                             byteBuffer.get(b);
-                                            mCallback.newMessage(new Message("",
-                                                    new String(b), MessageType.MESSAGE));
+
+                                            try {
+                                                JSONObject messageJson = new JSONObject(new String(b, Charset.forName("UTF-8")));
+                                                Message message = new Message(messageJson.getString("name"), messageJson.getString("message"), MessageType.MESSAGE);
+
+                                                mCallback.newMessage(message);
+
+                                            } catch (JSONException ex) {
+                                                ex.printStackTrace();
+                                            }
 
                                         }
                                     });
@@ -444,25 +476,13 @@ public class Communication {
                     });
 
             createDataChanel();
-            Log.d(SOCKET_IO_TAG,peerConnection.signalingState().toString());
+            Log.d(SOCKET_IO_TAG, peerConnection.signalingState().toString());
 
         }
 
 
         public void createDataChanel() {
             dataChannel = peerConnection.createDataChannel(user.getSocketId(), new DataChannel.Init());
-            dataChannel.registerObserver(new DataChannel.Observer() {
-                @Override
-                public void onStateChange() {
-                    Log.d(SOCKET_IO_TAG, "DataChanel STATECHANGE: " + dataChannel.state());
-
-                }
-
-                @Override
-                public void onMessage(DataChannel.Buffer buffer) {
-            }
-            });
-
         }
 
         public void setRemoteDescription(SessionDescription sessionDescription) {
@@ -522,6 +542,7 @@ public class Communication {
                         JSONObject description = new JSONObject();
                         description.put("type", sessionDescription.type);
                         description.put("description", sessionDescription.description);
+                        description.put("name", ChatActivity.mMyNickname);
 
                         JSONObject data = new JSONObject();
                         data.put("offer", description);

@@ -17,6 +17,8 @@ public interface ChatViewCallback{
 
     void newMessage(Message msg);
 
+    void userInChat(User user);
+
 
 
 }
